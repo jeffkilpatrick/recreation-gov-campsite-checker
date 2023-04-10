@@ -1,7 +1,8 @@
 import logging
+import time
 
 import requests
-import user_agent 
+import user_agent
 
 from utils import formatter
 
@@ -17,7 +18,7 @@ class RecreationClient:
     MAIN_PAGE_ENDPOINT = BASE_URL + "/api/camps/campgrounds/{park_id}"
 
     headers = {"User-Agent": user_agent.generate_user_agent() }
-    
+
     @classmethod
     def get_availability(cls, park_id, month_date):
         params = {"start_date": formatter.format_date(month_date)}
@@ -37,12 +38,24 @@ class RecreationClient:
 
     @classmethod
     def _send_request(cls, url, params):
+        max_attempts = 3
         resp = requests.get(url, params=params, headers=cls.headers)
-        if resp.status_code != 200:
-            raise RuntimeError(
+        for i in range(0, max_attempts):
+            if resp.status_code == 200:
+                return resp.json()
+            elif resp.status_code == 429:
+                time.sleep(0.5)
+                continue
+            else:
+                raise RuntimeError(
+                    "failedRequest",
+                    "ERROR, {status_code} code received from {url}: {resp_text}".format(
+                        status_code=resp.status_code, url=url, resp_text=resp.text
+                    ),
+                )
+        raise RuntimeError(
                 "failedRequest",
-                "ERROR, {status_code} code received from {url}: {resp_text}".format(
-                    status_code=resp.status_code, url=url, resp_text=resp.text
+                "ERROR, Failed after {attempts} attempts to retreive {url}".format(
+                    attempts=max_attempts, url=url
                 ),
-            )
-        return resp.json()
+        )
