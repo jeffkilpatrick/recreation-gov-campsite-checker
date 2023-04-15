@@ -38,7 +38,7 @@ class RecreationClient:
 
     @classmethod
     def _send_request(cls, url, params):
-        max_attempts = 3
+        max_attempts = 10
         resp = requests.get(url, params=params, headers=cls.headers)
         for i in range(0, max_attempts):
             if resp.status_code == 200:
