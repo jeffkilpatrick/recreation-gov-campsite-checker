@@ -305,7 +305,10 @@ def mail_reporter(settings: Dict[str, Any]) -> REPORTER:
 
         if not has_availabilities and settings.get("require_availability", False):
             return
-        message = "\n".join(messages)
+        if len(messages) == 1:
+            message = "No available campsites"
+        else:
+            message = "\n".join(messages)
         message_ascii = message.encode("utf-8").decode("ascii", "ignore")
         body = f"""Subject: {SUBJECT}
 From: {str(settings["from_name"])} <{str(settings["from_email"])}>
