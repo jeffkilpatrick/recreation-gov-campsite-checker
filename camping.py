@@ -297,7 +297,7 @@ def mail_reporter(settings: Dict[str, Any]) -> REPORTER:
     SUBJECT = "Campsite Watcher"
 
     def report(info_by_park_id: Dict[int, AVAILABLE_PARK_SITES_BY_DATE], has_availabilities: bool) -> None:
-        messages: List[str] = ["Available campsites:"]
+        messages: List[str] = []
         for park_id, (num_available, num_sites, available_dates_by_site_id, park_name) in info_by_park_id.items():
             if num_available < 1:
                 continue
@@ -305,7 +305,7 @@ def mail_reporter(settings: Dict[str, Any]) -> REPORTER:
 
         if not has_availabilities and settings.get("require_availability", False):
             return
-        if len(messages) == 1:
+        if len(messages) == 0:
             message = "No available campsites"
         else:
             message = "\n".join(messages)
