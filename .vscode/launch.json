@@ -1,0 +1,16 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Python Debugger: camping.py",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "camping.py",
+            "console": "integratedTerminal",
+            "args":["--show-campsite-info", "--start-date", "2024-08-19", "--end-date", "2024-08-23", "--nights", "1", "--parks", "232453", "232448", "232449", "10174943"]
+        }
+    ]
+}
