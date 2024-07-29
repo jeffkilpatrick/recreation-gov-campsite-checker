@@ -290,6 +290,47 @@ def parse_settings() -> Dict[str, Any]:
         return {"print": {"enabled": True}}
 
 
+def compress_dates(dates: List[Dict[str, str]]) -> List[Dict[str, str]]:
+    if len(dates) == 0:
+        return dates
+
+    compressed: List[Dict[str, str]] = []
+    start: Optional[datetime] = None
+    end: Optional[datetime] = None
+    length: Optional[int] = None
+    for entry in dates:
+        this_start = datetime.fromisoformat(entry["start"])
+        this_end = datetime.fromisoformat(entry["end"])
+        if not start:
+            # New range
+            start = this_start
+            end = this_end
+            length = 1
+            continue
+        if end == this_start:
+            # Extend the range
+            end = this_end
+            length += 1
+        else:
+            # Finish the range
+            compressed.append({
+                "start": start.strftime("%Y-%m-%d"),
+                "end": end.strftime("%Y-%m-%d"),
+                "length": str(length)
+            })
+            start = None
+            end = None
+            length = None
+    if start:
+        compressed.append({
+            "start": start.strftime("%Y-%m-%d"),
+            "end": end.strftime("%Y-%m-%d"),
+            "length": str(length)
+        })
+
+    return compressed
+
+
 REPORTER = Callable[[Dict[int, AVAILABLE_PARK_SITES_BY_DATE], bool], None]
 
 
@@ -298,10 +339,22 @@ def mail_reporter(settings: Dict[str, Any]) -> REPORTER:
 
     def report(info_by_park_id: Dict[int, AVAILABLE_PARK_SITES_BY_DATE], has_availabilities: bool) -> None:
         messages: List[str] = []
+        first = True
         for park_id, (num_available, num_sites, available_dates_by_site_id, park_name) in info_by_park_id.items():
             if num_available < 1:
                 continue
-            messages.append(f"{park_name}: {num_available} sites")
+            if first:
+                first = False
+            else:
+                message.append("")
+            messages.append(f"-=-=- {park_name}: {num_available} of {num_sites} sites available -=-=-")
+
+            if settings.get("verbose", False):
+                for site_id, dates in available_dates_by_site_id.items():
+                    messages.append(f"Site {site_id}: ")
+                    squashed_dates = compress_dates(dates)
+                    for d in squashed_dates:
+                        messages.append(f" * {d['start']} -> {d['end']} ({d['length']} nights)")
 
         if not has_availabilities and settings.get("require_availability", False):
             return
