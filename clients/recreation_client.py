@@ -4,6 +4,7 @@ import time
 import requests
 import user_agent
 
+from typing import Any, Dict
 from utils import formatter
 
 LOG = logging.getLogger(__name__)
@@ -16,6 +17,9 @@ class RecreationClient:
         BASE_URL + "/api/camps/availability/campground/{park_id}/month"
     )
     MAIN_PAGE_ENDPOINT = BASE_URL + "/api/camps/campgrounds/{park_id}"
+    SITE_PAGE_ENDPOINT = BASE_URL + "/api/camps/campsites/{site_id}"
+
+    _SITE_ATTRIBUTES: Dict[int, Any ]= {}
 
     headers = {"User-Agent": user_agent.generate_user_agent() }
 
@@ -35,6 +39,15 @@ class RecreationClient:
             cls.MAIN_PAGE_ENDPOINT.format(park_id=park_id), {}
         )
         return resp["campground"]["facility_name"]
+
+    @classmethod
+    def get_site_attributes(cls, site_id: int) -> Dict[int, Any]:
+        if site_id not in cls._SITE_ATTRIBUTES:
+            resp = cls._send_request(
+                cls.SITE_PAGE_ENDPOINT.format(site_id=site_id), {}
+            )
+            cls._SITE_ATTRIBUTES[site_id] = resp["campsite"]
+        return cls._SITE_ATTRIBUTES[site_id]
 
     @classmethod
     def _send_request(cls, url, params):

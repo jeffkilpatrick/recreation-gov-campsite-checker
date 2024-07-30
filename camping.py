@@ -351,7 +351,8 @@ def mail_reporter(settings: Dict[str, Any]) -> REPORTER:
 
             if settings.get("verbose", False):
                 for site_id, dates in available_dates_by_site_id.items():
-                    messages.append(f"Site {site_id}: ")
+                    site_atts = RecreationClient.get_site_attributes(site_id)
+                    messages.append(f"Site {site_atts['campsite_name']} ({site_atts['campsite_type']}):")
                     squashed_dates = compress_dates(dates)
                     for d in squashed_dates:
                         messages.append(f" * {d['start']} -> {d['end']} ({d['length']} nights)")

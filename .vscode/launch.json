@@ -10,7 +10,7 @@
             "request": "launch",
             "program": "camping.py",
             "console": "integratedTerminal",
-            "args":["--show-campsite-info", "--start-date", "2024-08-19", "--end-date", "2024-08-23", "--nights", "1", "--parks", "232453", "232448", "232449", "10174943"]
+            "args":["--show-campsite-info", "--start-date", "2024-09-24", "--end-date", "2024-10-03", "--nights", "1", "--parks", "232447", "10174943"]
         }
     ]
 }
