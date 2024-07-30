@@ -346,7 +346,7 @@ def mail_reporter(settings: Dict[str, Any]) -> REPORTER:
             if first:
                 first = False
             else:
-                message.append("")
+                messages.append("")
             messages.append(f"-=-=- {park_name}: {num_available} of {num_sites} sites available -=-=-")
 
             if settings.get("verbose", False):
