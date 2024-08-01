@@ -2,8 +2,8 @@ from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from clients.recreation_client import RecreationClient
-from enums.date_format import DateFormat
 from enums.emoji import Emoji
+from hash_store import HashStore
 
 
 AVAILABLE_PARK_SITES_BY_DATE = Tuple[int, int, Dict[int, List[Dict[str, str]]], str]
@@ -105,8 +105,19 @@ def compress_dates(dates: List[Dict[str, str]]) -> List[Dict[str, str]]:
 
 def make_formatter(settings: Dict[str, Any]) -> FORMATTER:
     name = settings.get("format", "classic")
+    check_hash = settings.get("check_hash", True)
     factory = globals().get(name, classic)
-    return factory(settings)
+    formatter = factory(settings)
+
+    def hash_checker(info_by_park_id: Dict[int, AVAILABLE_PARK_SITES_BY_DATE], has_availabilities: bool) -> Optional[str]:
+        hash_store = HashStore()
+        formatted = formatter(info_by_park_id, has_availabilities)
+        is_new = hash_store.check_and_save(name, formatted or "")
+        if is_new and formatted:
+            return formatted
+        return None
+
+    return hash_checker if check_hash else formatter
 
 def verbose_ascii(settings: Dict[str, Any]) -> FORMATTER:
     def formatter(info_by_park_id: Dict[int, AVAILABLE_PARK_SITES_BY_DATE], has_availabilities: bool) -> Optional[str]:
