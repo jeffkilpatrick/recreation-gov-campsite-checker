@@ -297,6 +297,8 @@ def mail_reporter(settings: Dict[str, Any], formatter: f.FORMATTER) -> REPORTER:
 
     def report(info_by_park_id: Dict[int, f.AVAILABLE_PARK_SITES_BY_DATE], has_availabilities: bool) -> None:
         message_ascii = formatter(info_by_park_id, has_availabilities)
+        if message_ascii is None:
+            return
         body = f"""Subject: {SUBJECT}
 From: {str(settings["from_name"])} <{str(settings["from_email"])}>
 To: {", ".join(settings["recipients"])}
@@ -335,7 +337,9 @@ def get_reporters(settings: Dict[str, Any], start_date: datetime, end_date: date
         print_settings = settings["print"]
         def printer(info_by_park_id: Dict[int, f.AVAILABLE_PARK_SITES_BY_DATE], has_availabilities: bool) -> None:
             formatter = f.make_formatter(print_settings)
-            print(formatter(info_by_park_id, has_availabilities))
+            formatted = formatter(info_by_park_id, has_availabilities)
+            if formatted is not None:
+                print(formatted)
         reporters.append(printer)
 
 
