@@ -41,7 +41,7 @@ class RecreationClient:
         return resp["campground"]["facility_name"]
 
     @classmethod
-    def get_site_attributes(cls, site_id: int) -> Dict[int, Any]:
+    def get_site_attributes(cls, site_id: int) -> Dict[str, Any]:
         if site_id not in cls._SITE_ATTRIBUTES:
             resp = cls._send_request(
                 cls.SITE_PAGE_ENDPOINT.format(site_id=site_id), {}

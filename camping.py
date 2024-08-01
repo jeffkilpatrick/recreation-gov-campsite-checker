@@ -11,9 +11,11 @@ import yaml
 from collections import defaultdict
 from datetime import datetime, timedelta
 from itertools import count, groupby
-from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional
 
 from dateutil import rrule
+
+import formatters as f
 
 from clients.recreation_client import RecreationClient
 from enums.date_format import DateFormat
@@ -108,30 +110,28 @@ def is_weekend(date):
     return weekday == 4 or weekday == 5
 
 
-AVAILABLE_SITES_BY_DATE = Tuple[int, int, Dict[int, List[Dict[str, datetime]]]]
-
 def get_num_available_sites(
     park_information, start_date: datetime, end_date: datetime, nights: Optional[int] = None, weekends_only: bool = False,
-) -> AVAILABLE_SITES_BY_DATE:
+) -> f.AVAILABLE_SITES_BY_DATE:
     maximum = len(park_information)
 
     num_available = 0
     num_days = (end_date - start_date).days
-    dates: Iterable[datetime] = [end_date - timedelta(days=i) for i in range(1, num_days + 1)]
+    raw_dates: Iterable[datetime] = [end_date - timedelta(days=i) for i in range(1, num_days + 1)]
     if weekends_only:
-        dates = filter(is_weekend, dates)
-    dates = set(
+        raw_dates = filter(is_weekend, raw_dates)
+    dates: Iterable[str] = set(
         formatter.format_date(
             i, format_string=DateFormat.ISO_DATE_FORMAT_RESPONSE.value
         )
-        for i in dates
+        for i in raw_dates
     )
 
     if nights not in range(1, num_days + 1):
         nights = num_days
         LOG.debug("Setting number of nights to {}.".format(nights))
 
-    available_dates_by_campsite_id: Dict[int, List[Dict[str, datetime]]] = defaultdict(list)
+    available_dates_by_campsite_id: Dict[int, List[Dict[str, str]]] = defaultdict(list)
     for site, availabilities in park_information.items():
         # List of dates that are in the desired range for this site.
         desired_available = []
@@ -199,11 +199,10 @@ def consecutive_nights(available, nights):
 
     return long_enough_consecutive_ranges
 
-AVAILABLE_PARK_SITES_BY_DATE = Tuple[int, int, Dict[int, List[Dict[str, datetime]]], str]
 
 def check_park(
     park_id, start_date, end_date, campsite_type, campsite_ids=(), nights=None, weekends_only=False, excluded_site_ids=[],
-) -> AVAILABLE_PARK_SITES_BY_DATE:
+) -> f.AVAILABLE_PARK_SITES_BY_DATE:
     park_information = get_park_information(
         park_id, start_date, end_date, campsite_type, campsite_ids
     )
@@ -220,7 +219,7 @@ def check_park(
 
 
 def generate_human_output(
-    info_by_park_id: Dict[int, AVAILABLE_PARK_SITES_BY_DATE], start_date: datetime, end_date: datetime, gen_campsite_info=False
+    info_by_park_id: Dict[int, f.AVAILABLE_PARK_SITES_BY_DATE], start_date: datetime, end_date: datetime, gen_campsite_info=False
 ):
     out = []
     has_availabilities = False
@@ -270,7 +269,7 @@ def generate_human_output(
     return "\n".join(out), has_availabilities
 
 
-def generate_json_output(info_by_park_id: Dict[int, AVAILABLE_PARK_SITES_BY_DATE]):
+def generate_json_output(info_by_park_id: Dict[int, f.AVAILABLE_PARK_SITES_BY_DATE]):
     availabilities_by_park_id = {}
     has_availabilities = False
     for park_id, info in info_by_park_id.items():
@@ -290,80 +289,14 @@ def parse_settings() -> Dict[str, Any]:
         return {"print": {"enabled": True}}
 
 
-def compress_dates(dates: List[Dict[str, str]]) -> List[Dict[str, str]]:
-    if len(dates) == 0:
-        return dates
-
-    compressed: List[Dict[str, str]] = []
-    start: Optional[datetime] = None
-    end: Optional[datetime] = None
-    length: Optional[int] = None
-    for entry in dates:
-        this_start = datetime.fromisoformat(entry["start"])
-        this_end = datetime.fromisoformat(entry["end"])
-        if not start:
-            # New range
-            start = this_start
-            end = this_end
-            length = 1
-            continue
-        if end == this_start:
-            # Extend the range
-            end = this_end
-            length += 1
-        else:
-            # Finish the range
-            compressed.append({
-                "start": start.strftime("%Y-%m-%d"),
-                "end": end.strftime("%Y-%m-%d"),
-                "length": str(length)
-            })
-            start = None
-            end = None
-            length = None
-    if start:
-        compressed.append({
-            "start": start.strftime("%Y-%m-%d"),
-            "end": end.strftime("%Y-%m-%d"),
-            "length": str(length)
-        })
-
-    return compressed
+REPORTER = Callable[[Dict[int, f.AVAILABLE_PARK_SITES_BY_DATE], bool], None]
 
 
-REPORTER = Callable[[Dict[int, AVAILABLE_PARK_SITES_BY_DATE], bool], None]
-
-
-def mail_reporter(settings: Dict[str, Any]) -> REPORTER:
+def mail_reporter(settings: Dict[str, Any], formatter: f.FORMATTER) -> REPORTER:
     SUBJECT = "Campsite Watcher"
 
-    def report(info_by_park_id: Dict[int, AVAILABLE_PARK_SITES_BY_DATE], has_availabilities: bool) -> None:
-        messages: List[str] = []
-        first = True
-        for park_id, (num_available, num_sites, available_dates_by_site_id, park_name) in info_by_park_id.items():
-            if num_available < 1:
-                continue
-            if first:
-                first = False
-            else:
-                messages.append("")
-            messages.append(f"-=-=- {park_name}: {num_available} of {num_sites} sites available -=-=-")
-
-            if settings.get("verbose", False):
-                for site_id, dates in available_dates_by_site_id.items():
-                    site_atts = RecreationClient.get_site_attributes(site_id)
-                    messages.append(f"Site {site_atts['campsite_name']} ({site_atts['campsite_type']}):")
-                    squashed_dates = compress_dates(dates)
-                    for d in squashed_dates:
-                        messages.append(f" * {d['start']} -> {d['end']} ({d['length']} nights)")
-
-        if not has_availabilities and settings.get("require_availability", False):
-            return
-        if len(messages) == 0:
-            message = "No available campsites"
-        else:
-            message = "\n".join(messages)
-        message_ascii = message.encode("utf-8").decode("ascii", "ignore")
+    def report(info_by_park_id: Dict[int, f.AVAILABLE_PARK_SITES_BY_DATE], has_availabilities: bool) -> None:
+        message_ascii = formatter(info_by_park_id, has_availabilities)
         body = f"""Subject: {SUBJECT}
 From: {str(settings["from_name"])} <{str(settings["from_email"])}>
 To: {", ".join(settings["recipients"])}
@@ -386,25 +319,35 @@ To: {", ".join(settings["recipients"])}
 def get_reporters(settings: Dict[str, Any], start_date: datetime, end_date: datetime, show_campsite_info=False) -> Iterable[REPORTER]:
     reporters: List[REPORTER] = []
 
+    # if "print" in settings and settings["print"].get("enabled", True):
+    #     def printer(info_by_park_id: Dict[int, AVAILABLE_PARK_SITES_BY_DATE], _: bool) -> None:
+    #         output, has_availabilities = generate_human_output(
+    #             info_by_park_id,
+    #             args.start_date,
+    #             args.end_date,
+    #             args.show_campsite_info,
+    #         )
+    #         if has_availabilities and not settings.get("require_availability", False):
+    #             print(output)
+    #     reporters.append(printer)
+
     if "print" in settings and settings["print"].get("enabled", True):
-        def printer(info_by_park_id: Dict[int, AVAILABLE_PARK_SITES_BY_DATE], _: bool) -> None:
-            output, has_availabilities = generate_human_output(
-                info_by_park_id,
-                args.start_date,
-                args.end_date,
-                args.show_campsite_info,
-            )
-            if has_availabilities and not settings.get("require_availability", False):
-                print(output)
+        print_settings = settings["print"]
+        def printer(info_by_park_id: Dict[int, f.AVAILABLE_PARK_SITES_BY_DATE], has_availabilities: bool) -> None:
+            formatter = f.make_formatter(print_settings)
+            print(formatter(info_by_park_id, has_availabilities))
         reporters.append(printer)
 
+
     if "smtp" in settings and settings["smtp"].get("enabled", True):
-        reporters.append(mail_reporter(settings["smtp"]))
+        smtp_settings = settings["smtp"]
+        formatter = f.make_formatter(smtp_settings)
+        reporters.append(mail_reporter(smtp_settings, formatter))
 
     return reporters
 
-def main(parks, json_output=False, reporters: Iterable[REPORTER] = [print]) -> None:
-    info_by_park_id: Dict[int, AVAILABLE_PARK_SITES_BY_DATE] = {}
+def main(parks, json_output=False, reporters: Iterable[REPORTER] = [print]) -> bool:
+    info_by_park_id: Dict[int, f.AVAILABLE_PARK_SITES_BY_DATE] = {}
     for park_id in parks:
         info_by_park_id[park_id] = check_park(
             park_id,
